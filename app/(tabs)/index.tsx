@@ -1,15 +1,18 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { useTheme } from '../../src/context/ThemeContext';
 import { useApp } from '../../src/context/AppContext';
+import { usePremium } from '../../src/context/PremiumContext';
 import {
   Card,
   WeekStrip,
   Button,
   MilestoneModal,
+  PredictiveAlert,
 } from '../../src/components';
+import { getPredictiveAlert } from '../../src/services/predictions';
 import { Spacing, FontSize, FontWeight, BorderRadius } from '../../src/constants/theme';
 import { MIN_LOGS_FOR_INSIGHTS } from '../../src/constants/data';
 
@@ -19,15 +22,25 @@ export default function HomeScreen() {
   const {
     stats,
     logs,
+    urgeCheckIns,
     isOnboarded,
     hasCheckedInToday,
     newMilestones,
     clearNewMilestones,
     triggerHaptic,
     getMostCommonTrigger,
+    isPremium,
   } = useApp();
 
+  const { showUpgradePrompt } = usePremium();
   const [showMilestone, setShowMilestone] = useState(false);
+  const [alertDismissed, setAlertDismissed] = useState(false);
+
+  // Get predictive alert for premium users
+  const predictiveAlert = useMemo(() => {
+    if (!isPremium || alertDismissed) return null;
+    return getPredictiveAlert(logs, urgeCheckIns);
+  }, [isPremium, logs, urgeCheckIns, alertDismissed]);
 
   useEffect(() => {
     if (!isOnboarded) {
@@ -72,17 +85,32 @@ export default function HomeScreen() {
               Binge Log
             </Text>
           </View>
-          <TouchableOpacity
-            style={[styles.logButton, { backgroundColor: theme.primary }]}
-            onPress={() => {
-              triggerHaptic('light');
-              router.push('/log');
-            }}
-            activeOpacity={0.8}
-          >
-            <Feather name="edit-3" size={16} color="#FFFFFF" />
-            <Text style={styles.logButtonText}>Log</Text>
-          </TouchableOpacity>
+          <View style={styles.headerButtons}>
+            {!isPremium && (
+              <TouchableOpacity
+                style={styles.proButton}
+                onPress={() => {
+                  triggerHaptic('light');
+                  showUpgradePrompt('detailed_charts');
+                }}
+                activeOpacity={0.8}
+              >
+                <Feather name="award" size={14} color="#FFFFFF" />
+                <Text style={styles.proButtonText}>Pro</Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity
+              style={[styles.logButton, { backgroundColor: theme.primary }]}
+              onPress={() => {
+                triggerHaptic('light');
+                router.push('/log');
+              }}
+              activeOpacity={0.8}
+            >
+              <Feather name="edit-3" size={16} color="#FFFFFF" />
+              <Text style={styles.logButtonText}>Log</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Main Streak Display */}
@@ -102,6 +130,17 @@ export default function HomeScreen() {
             </Text>
           )}
         </Card>
+
+        {/* Predictive Alert - Premium Feature */}
+        {predictiveAlert && (
+          <View style={styles.predictiveAlertContainer}>
+            <PredictiveAlert
+              alert={predictiveAlert}
+              onDismiss={() => setAlertDismissed(true)}
+              onAction={() => router.push('/urge')}
+            />
+          </View>
+        )}
 
         {/* Week Strip */}
         <View style={styles.weekStripContainer}>
@@ -299,6 +338,25 @@ const styles = StyleSheet.create({
     fontWeight: FontWeight.semibold,
     letterSpacing: -0.3,
   },
+  headerButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  proButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.full,
+    gap: Spacing.xs,
+    backgroundColor: '#7C3AED',
+  },
+  proButtonText: {
+    color: '#FFFFFF',
+    fontSize: FontSize.sm,
+    fontWeight: FontWeight.semibold,
+  },
   logButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -311,6 +369,9 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: FontSize.sm,
     fontWeight: FontWeight.semibold,
+  },
+  predictiveAlertContainer: {
+    marginTop: Spacing.lg,
   },
   streakCard: {
     alignItems: 'center',

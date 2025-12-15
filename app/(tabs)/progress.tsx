@@ -5,12 +5,16 @@ import {
   StyleSheet,
   SafeAreaView,
   ScrollView,
+  TouchableOpacity,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useTheme } from '../../src/context/ThemeContext';
 import { useApp } from '../../src/context/AppContext';
-import { Card } from '../../src/components';
+import { usePremium } from '../../src/context/PremiumContext';
+import { Card, UpgradeModal, PaywallLock } from '../../src/components';
+import { TrendChart, EmotionBreakdown, TimeHeatmap, DayPatterns } from '../../src/components/charts';
 import { TIME_WINDOWS, DAYS_OF_WEEK } from '../../src/constants/data';
+import { FREE_HISTORY_DAYS } from '../../src/constants/premium';
 import { Spacing, FontSize, FontWeight, BorderRadius } from '../../src/constants/theme';
 
 const MIN_DATA_FOR_PATTERNS = 3;
@@ -19,7 +23,45 @@ type StrategyPairing = { trigger: string; strategy: string; count: number };
 
 export default function InsightsScreen() {
   const { theme } = useTheme();
-  const { logs, stats, urges, urgeCheckIns } = useApp();
+  const { logs, stats, urges, urgeCheckIns, isPremium } = useApp();
+  const { showUpgradePrompt, upgradeModalVisible, hideUpgradePrompt, currentFeature } = usePremium();
+
+  // Calculate history cutoff date (30 days ago)
+  const historyCutoff = useMemo(() => {
+    return Date.now() - (FREE_HISTORY_DAYS * 24 * 60 * 60 * 1000);
+  }, []);
+
+  // Check if user has data older than the free limit
+  const hasOlderData = useMemo(() => {
+    const oldLogs = logs.some(log => log.timestamp < historyCutoff);
+    const oldUrges = urges.some(urge => urge.timestamp < historyCutoff);
+    const oldCheckIns = urgeCheckIns.some(checkIn => checkIn.timestamp < historyCutoff);
+    return oldLogs || oldUrges || oldCheckIns;
+  }, [logs, urges, urgeCheckIns, historyCutoff]);
+
+  // Count older entries
+  const olderEntriesCount = useMemo(() => {
+    const oldLogs = logs.filter(log => log.timestamp < historyCutoff).length;
+    const oldUrges = urges.filter(urge => urge.timestamp < historyCutoff).length;
+    const oldCheckIns = urgeCheckIns.filter(checkIn => checkIn.timestamp < historyCutoff).length;
+    return oldLogs + oldUrges + oldCheckIns;
+  }, [logs, urges, urgeCheckIns, historyCutoff]);
+
+  // Filter data based on premium status
+  const filteredLogs = useMemo(() => {
+    if (isPremium) return logs;
+    return logs.filter(log => log.timestamp >= historyCutoff);
+  }, [logs, isPremium, historyCutoff]);
+
+  const filteredUrges = useMemo(() => {
+    if (isPremium) return urges;
+    return urges.filter(urge => urge.timestamp >= historyCutoff);
+  }, [urges, isPremium, historyCutoff]);
+
+  const filteredUrgeCheckIns = useMemo(() => {
+    if (isPremium) return urgeCheckIns;
+    return urgeCheckIns.filter(checkIn => checkIn.timestamp >= historyCutoff);
+  }, [urgeCheckIns, isPremium, historyCutoff]);
 
   // Calculate time since last binge (granular)
   const timeSinceLastBinge = useMemo(() => {
@@ -47,11 +89,11 @@ export default function InsightsScreen() {
     const oneWeekAgo = now - 7 * 24 * 60 * 60 * 1000;
     const twoWeeksAgo = now - 14 * 24 * 60 * 60 * 1000;
 
-    const thisWeekLogs = logs.filter(l => l.timestamp >= oneWeekAgo);
-    const lastWeekLogs = logs.filter(l => l.timestamp >= twoWeeksAgo && l.timestamp < oneWeekAgo);
+    const thisWeekLogs = filteredLogs.filter(l => l.timestamp >= oneWeekAgo);
+    const lastWeekLogs = filteredLogs.filter(l => l.timestamp >= twoWeeksAgo && l.timestamp < oneWeekAgo);
 
-    const thisWeekUrges = urges.filter(u => u.timestamp >= oneWeekAgo);
-    const lastWeekUrges = urges.filter(u => u.timestamp >= twoWeeksAgo && u.timestamp < oneWeekAgo);
+    const thisWeekUrges = filteredUrges.filter(u => u.timestamp >= oneWeekAgo);
+    const lastWeekUrges = filteredUrges.filter(u => u.timestamp >= twoWeeksAgo && u.timestamp < oneWeekAgo);
 
     const thisWeekSurfed = thisWeekUrges.filter(u => u.surfed).length;
     const lastWeekSurfed = lastWeekUrges.filter(u => u.surfed).length;
@@ -73,7 +115,7 @@ export default function InsightsScreen() {
         trend: urgesTrend,
       },
     };
-  }, [logs, urges]);
+  }, [filteredLogs, filteredUrges]);
 
   // Streak calendar (last 14 days)
   const streakCalendar = useMemo(() => {
@@ -88,7 +130,7 @@ export default function InsightsScreen() {
       const nextDay = new Date(date);
       nextDay.setDate(nextDay.getDate() + 1);
 
-      const hadBinge = logs.some(log => {
+      const hadBinge = filteredLogs.some(log => {
         const logDate = new Date(log.timestamp);
         return logDate >= date && logDate < nextDay;
       });
@@ -97,7 +139,7 @@ export default function InsightsScreen() {
     }
 
     return days;
-  }, [logs]);
+  }, [filteredLogs]);
 
   // Personal bests
   const personalBests = useMemo(() => {
@@ -111,18 +153,18 @@ export default function InsightsScreen() {
     // Check for urge surfing records this week
     const now = Date.now();
     const oneWeekAgo = now - 7 * 24 * 60 * 60 * 1000;
-    const thisWeekSurfed = urges.filter(u => u.timestamp >= oneWeekAgo && u.surfed).length;
+    const thisWeekSurfed = filteredUrges.filter(u => u.timestamp >= oneWeekAgo && u.surfed).length;
 
     if (thisWeekSurfed >= 3) {
       bests.push(`You've surfed ${thisWeekSurfed} urges this week`);
     }
 
     return bests;
-  }, [stats, urges]);
+  }, [stats, filteredUrges]);
 
   // Heads up - contextual warning based on current time/day
   const headsUp = useMemo(() => {
-    if (logs.length < 3) return null;
+    if (filteredLogs.length < 3) return null;
 
     const now = new Date();
     const currentDay = DAYS_OF_WEEK[now.getDay()];
@@ -137,7 +179,7 @@ export default function InsightsScreen() {
 
     // Check if current time matches high-risk patterns
     const dayTimeCounts: Record<string, number> = {};
-    logs.forEach(log => {
+    filteredLogs.forEach(log => {
       const logDate = new Date(log.timestamp);
       const day = DAYS_OF_WEEK[logDate.getDay()];
       const hour = logDate.getHours();
@@ -161,15 +203,15 @@ export default function InsightsScreen() {
     }
 
     return null;
-  }, [logs]);
+  }, [filteredLogs]);
 
   // Calculate pattern insights
   const patterns = useMemo(() => {
     // Combine all emotional data
     const allEmotions: string[] = [];
-    logs.forEach(log => allEmotions.push(...log.emotions));
-    urgeCheckIns.forEach(checkIn => allEmotions.push(...checkIn.triggers));
-    urges.forEach(urge => {
+    filteredLogs.forEach(log => allEmotions.push(...log.emotions));
+    filteredUrgeCheckIns.forEach(checkIn => allEmotions.push(...checkIn.triggers));
+    filteredUrges.forEach(urge => {
       if (urge.triggersPresent) allEmotions.push(...urge.triggersPresent);
     });
 
@@ -188,7 +230,7 @@ export default function InsightsScreen() {
     // Time patterns from logs
     const timeCounts: Record<string, number> = {};
     const dayCounts: Record<string, number> = {};
-    logs.forEach(log => {
+    filteredLogs.forEach(log => {
       const date = new Date(log.timestamp);
       const hour = date.getHours();
       const day = DAYS_OF_WEEK[date.getDay()];
@@ -213,7 +255,7 @@ export default function InsightsScreen() {
 
     // Location patterns
     const locationCounts: Record<string, number> = {};
-    logs.forEach(log => {
+    filteredLogs.forEach(log => {
       if (log.location) {
         locationCounts[log.location] = (locationCounts[log.location] || 0) + 1;
       }
@@ -223,7 +265,7 @@ export default function InsightsScreen() {
 
     // Coping strategies that worked
     const strategyCounts: Record<string, number> = {};
-    urges.filter(u => u.surfed && u.copingStrategies).forEach(urge => {
+    filteredUrges.filter(u => u.surfed && u.copingStrategies).forEach(urge => {
       urge.copingStrategies?.forEach(s => {
         strategyCounts[s] = (strategyCounts[s] || 0) + 1;
       });
@@ -235,7 +277,7 @@ export default function InsightsScreen() {
 
     // Strategy pairing - which strategy works for which trigger
     const strategyByTrigger: Record<string, Record<string, number>> = {};
-    urges.filter(u => u.surfed && u.copingStrategies && u.triggersPresent).forEach(urge => {
+    filteredUrges.filter(u => u.surfed && u.copingStrategies && u.triggersPresent).forEach(urge => {
       urge.triggersPresent?.forEach(trigger => {
         if (!strategyByTrigger[trigger]) {
           strategyByTrigger[trigger] = {};
@@ -257,8 +299,8 @@ export default function InsightsScreen() {
     });
 
     // Success rate
-    const totalUrgesWithOutcome = urges.length;
-    const successfulSurfs = urges.filter(u => u.surfed).length;
+    const totalUrgesWithOutcome = filteredUrges.length;
+    const successfulSurfs = filteredUrges.filter(u => u.surfed).length;
     const successRate = totalUrgesWithOutcome > 0
       ? Math.round((successfulSurfs / totalUrgesWithOutcome) * 100)
       : null;
@@ -282,10 +324,10 @@ export default function InsightsScreen() {
       bestPairing: bestPairing as StrategyPairing | null,
       successRate,
       suggestedAction,
-      hasEnoughData: allEmotions.length >= MIN_DATA_FOR_PATTERNS || logs.length >= MIN_DATA_FOR_PATTERNS,
+      hasEnoughData: allEmotions.length >= MIN_DATA_FOR_PATTERNS || filteredLogs.length >= MIN_DATA_FOR_PATTERNS,
       hasStrategyData: Object.keys(strategyCounts).length > 0,
     };
-  }, [logs, urges, urgeCheckIns]);
+  }, [filteredLogs, filteredUrges, filteredUrgeCheckIns]);
 
   const hasAnyData = logs.length > 0 || urges.length > 0 || urgeCheckIns.length > 0;
 
@@ -472,227 +514,224 @@ export default function InsightsScreen() {
           </View>
         </Card>
 
-        {/* Your Patterns */}
-        <Card style={styles.patternsCard}>
-          <View style={styles.patternsHeader}>
-            <View style={[styles.patternsIcon, { backgroundColor: theme.primarySoft }]}>
-              <Feather name="eye" size={18} color={theme.primary} />
-            </View>
-            <Text style={[styles.patternsTitle, { color: theme.text }]}>
-              Your Patterns
-            </Text>
-          </View>
+        {/* Unlock Full History - Show if user has older data and is not premium */}
+        {hasOlderData && !isPremium && (
+          <TouchableOpacity onPress={() => showUpgradePrompt('unlimited_history')}>
+            <Card style={[styles.unlockHistoryCard, { backgroundColor: theme.primarySoft }]}>
+              <View style={styles.unlockHistoryContent}>
+                <View style={[styles.unlockHistoryIcon, { backgroundColor: theme.primary }]}>
+                  <Feather name="clock" size={18} color="#FFFFFF" />
+                </View>
+                <View style={styles.unlockHistoryText}>
+                  <Text style={[styles.unlockHistoryTitle, { color: theme.primary }]}>
+                    Unlock Full History
+                  </Text>
+                  <Text style={[styles.unlockHistorySubtitle, { color: theme.text }]}>
+                    You have {olderEntriesCount} entries from before 30 days ago
+                  </Text>
+                </View>
+                <Feather name="chevron-right" size={20} color={theme.primary} />
+              </View>
+            </Card>
+          </TouchableOpacity>
+        )}
 
-          {patterns.hasEnoughData ? (
-            <View style={styles.visualPatterns}>
-              {/* Top Triggers */}
-              {patterns.topEmotions.length > 0 && (
-                <View style={styles.patternSection}>
-                  <Text style={[styles.patternSectionLabel, { color: theme.textTertiary }]}>Top triggers</Text>
-                  <View style={styles.chipRow}>
-                    {patterns.topEmotions.map((emotion, i) => (
-                      <View key={i} style={[styles.chip, { backgroundColor: theme.primarySoft }]}>
-                        <Feather name="alert-circle" size={14} color={theme.primary} />
-                        <Text style={[styles.chipText, { color: theme.primary }]}>
-                          {emotion.charAt(0).toUpperCase() + emotion.slice(1)}
+        {/* Premium Insights Section */}
+        {isPremium ? (
+          <>
+            {/* Your Patterns - Premium */}
+            <Card style={styles.patternsCard}>
+              <View style={styles.patternsHeader}>
+                <View style={[styles.patternsIcon, { backgroundColor: theme.primarySoft }]}>
+                  <Feather name="eye" size={18} color={theme.primary} />
+                </View>
+                <Text style={[styles.patternsTitle, { color: theme.text }]}>
+                  Your Patterns
+                </Text>
+              </View>
+
+              {patterns.hasEnoughData ? (
+                <View style={styles.visualPatterns}>
+                  {/* Top Triggers */}
+                  {patterns.topEmotions.length > 0 && (
+                    <View style={styles.patternSection}>
+                      <Text style={[styles.patternSectionLabel, { color: theme.textTertiary }]}>Top triggers</Text>
+                      <View style={styles.chipRow}>
+                        {patterns.topEmotions.map((emotion, i) => (
+                          <View key={i} style={[styles.chip, { backgroundColor: theme.primarySoft }]}>
+                            <Feather name="alert-circle" size={14} color={theme.primary} />
+                            <Text style={[styles.chipText, { color: theme.primary }]}>
+                              {emotion.charAt(0).toUpperCase() + emotion.slice(1)}
+                            </Text>
+                          </View>
+                        ))}
+                      </View>
+                    </View>
+                  )}
+
+                  {/* Peak Time */}
+                  {patterns.topTime && patterns.topDay && (
+                    <View style={styles.patternSection}>
+                      <Text style={[styles.patternSectionLabel, { color: theme.textTertiary }]}>Peak time</Text>
+                      <View style={styles.chipRow}>
+                        <View style={[styles.chip, { backgroundColor: theme.secondarySoft }]}>
+                          <Feather name="clock" size={14} color={theme.secondary} />
+                          <Text style={[styles.chipText, { color: theme.secondary }]}>
+                            {patterns.topDay} {patterns.topTime}s
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+                  )}
+
+                  {/* Location */}
+                  {patterns.topLocation && (
+                    <View style={styles.patternSection}>
+                      <Text style={[styles.patternSectionLabel, { color: theme.textTertiary }]}>Common place</Text>
+                      <View style={styles.chipRow}>
+                        <View style={[styles.chip, { backgroundColor: theme.accentSoft }]}>
+                          <Feather name="map-pin" size={14} color={theme.accent} />
+                          <Text style={[styles.chipText, { color: theme.accent }]}>
+                            {patterns.topLocation.charAt(0).toUpperCase() + patterns.topLocation.slice(1)}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+                  )}
+                </View>
+              ) : (
+                <Text style={[styles.emptyPatternsText, { color: theme.textMuted }]}>
+                  Log more to discover your patterns
+                </Text>
+              )}
+            </Card>
+
+            {/* What's Working - Premium */}
+            <Card style={styles.strategiesCard}>
+              <View style={styles.patternsHeader}>
+                <View style={[styles.patternsIcon, { backgroundColor: theme.accentSoft }]}>
+                  <Feather name="check-circle" size={18} color={theme.accent} />
+                </View>
+                <Text style={[styles.patternsTitle, { color: theme.text }]}>
+                  What's Working
+                </Text>
+              </View>
+
+              {patterns.hasStrategyData ? (
+                <View style={styles.visualPatterns}>
+                  {/* Success Rate */}
+                  {patterns.successRate !== null && patterns.successRate > 0 && (
+                    <View style={styles.successRateSection}>
+                      <View style={styles.successRateHeader}>
+                        <Text style={[styles.successRateValue, { color: theme.accent }]}>
+                          {patterns.successRate}%
+                        </Text>
+                        <Text style={[styles.successRateLabel, { color: theme.textTertiary }]}>
+                          urges surfed
                         </Text>
                       </View>
-                    ))}
-                  </View>
-                </View>
-              )}
-
-              {/* Peak Time */}
-              {patterns.topTime && patterns.topDay && (
-                <View style={styles.patternSection}>
-                  <Text style={[styles.patternSectionLabel, { color: theme.textTertiary }]}>Peak time</Text>
-                  <View style={styles.chipRow}>
-                    <View style={[styles.chip, { backgroundColor: theme.secondarySoft }]}>
-                      <Feather name="clock" size={14} color={theme.secondary} />
-                      <Text style={[styles.chipText, { color: theme.secondary }]}>
-                        {patterns.topDay} {patterns.topTime}s
-                      </Text>
+                      <View style={[styles.progressBarBg, { backgroundColor: theme.border }]}>
+                        <View
+                          style={[
+                            styles.progressBarFill,
+                            { backgroundColor: theme.accent, width: `${patterns.successRate}%` }
+                          ]}
+                        />
+                      </View>
                     </View>
-                  </View>
-                </View>
-              )}
+                  )}
 
-              {/* Location */}
-              {patterns.topLocation && (
-                <View style={styles.patternSection}>
-                  <Text style={[styles.patternSectionLabel, { color: theme.textTertiary }]}>Common place</Text>
-                  <View style={styles.chipRow}>
-                    <View style={[styles.chip, { backgroundColor: theme.accentSoft }]}>
-                      <Feather name="map-pin" size={14} color={theme.accent} />
-                      <Text style={[styles.chipText, { color: theme.accent }]}>
-                        {patterns.topLocation.charAt(0).toUpperCase() + patterns.topLocation.slice(1)}
-                      </Text>
+                  {/* Top Strategy */}
+                  {patterns.topStrategies.length > 0 && (
+                    <View style={styles.patternSection}>
+                      <Text style={[styles.patternSectionLabel, { color: theme.textTertiary }]}>Best strategy</Text>
+                      <View style={styles.chipRow}>
+                        <View style={[styles.chip, { backgroundColor: theme.accentSoft }]}>
+                          <Feather name="heart" size={14} color={theme.accent} />
+                          <Text style={[styles.chipText, { color: theme.accent }]}>
+                            {patterns.topStrategies[0].charAt(0).toUpperCase() + patterns.topStrategies[0].slice(1)}
+                          </Text>
+                        </View>
+                      </View>
                     </View>
-                  </View>
-                </View>
-              )}
-            </View>
-          ) : (
-            <View style={styles.visualPatterns}>
-              {/* Top Triggers */}
-              <View style={styles.patternSection}>
-                <Text style={[styles.patternSectionLabel, { color: theme.textTertiary }]}>Top triggers</Text>
-                <View style={styles.chipRow}>
-                  <View style={[styles.chip, { backgroundColor: theme.primarySoft }]}>
-                    <Feather name="alert-circle" size={14} color={theme.primary} />
-                    <Text style={[styles.chipText, { color: theme.primary }]}>Stressed</Text>
-                  </View>
-                  <View style={[styles.chip, { backgroundColor: theme.primarySoft }]}>
-                    <Feather name="alert-circle" size={14} color={theme.primary} />
-                    <Text style={[styles.chipText, { color: theme.primary }]}>Anxious</Text>
-                  </View>
-                </View>
-              </View>
+                  )}
 
-              {/* Peak Time */}
-              <View style={styles.patternSection}>
-                <Text style={[styles.patternSectionLabel, { color: theme.textTertiary }]}>Peak time</Text>
-                <View style={styles.chipRow}>
-                  <View style={[styles.chip, { backgroundColor: theme.secondarySoft }]}>
-                    <Feather name="clock" size={14} color={theme.secondary} />
-                    <Text style={[styles.chipText, { color: theme.secondary }]}>Sunday evenings</Text>
-                  </View>
-                </View>
-              </View>
-
-              {/* Location */}
-              <View style={styles.patternSection}>
-                <Text style={[styles.patternSectionLabel, { color: theme.textTertiary }]}>Common place</Text>
-                <View style={styles.chipRow}>
-                  <View style={[styles.chip, { backgroundColor: theme.accentSoft }]}>
-                    <Feather name="map-pin" size={14} color={theme.accent} />
-                    <Text style={[styles.chipText, { color: theme.accent }]}>Home</Text>
-                  </View>
-                </View>
-              </View>
-            </View>
-          )}
-        </Card>
-
-        {/* What's Working */}
-        <Card style={styles.strategiesCard}>
-          <View style={styles.patternsHeader}>
-            <View style={[styles.patternsIcon, { backgroundColor: theme.accentSoft }]}>
-              <Feather name="check-circle" size={18} color={theme.accent} />
-            </View>
-            <Text style={[styles.patternsTitle, { color: theme.text }]}>
-              What's Working
-            </Text>
-          </View>
-
-          {patterns.hasStrategyData ? (
-            <View style={styles.visualPatterns}>
-              {/* Success Rate */}
-              {patterns.successRate !== null && patterns.successRate > 0 && (
-                <View style={styles.successRateSection}>
-                  <View style={styles.successRateHeader}>
-                    <Text style={[styles.successRateValue, { color: theme.accent }]}>
-                      {patterns.successRate}%
-                    </Text>
-                    <Text style={[styles.successRateLabel, { color: theme.textTertiary }]}>
-                      urges surfed
-                    </Text>
-                  </View>
-                  <View style={[styles.progressBarBg, { backgroundColor: theme.border }]}>
-                    <View
-                      style={[
-                        styles.progressBarFill,
-                        { backgroundColor: theme.accent, width: `${patterns.successRate}%` }
-                      ]}
-                    />
-                  </View>
-                </View>
-              )}
-
-              {/* Top Strategy */}
-              {patterns.topStrategies.length > 0 && (
-                <View style={styles.patternSection}>
-                  <Text style={[styles.patternSectionLabel, { color: theme.textTertiary }]}>Best strategy</Text>
-                  <View style={styles.chipRow}>
-                    <View style={[styles.chip, { backgroundColor: theme.accentSoft }]}>
-                      <Feather name="heart" size={14} color={theme.accent} />
-                      <Text style={[styles.chipText, { color: theme.accent }]}>
-                        {patterns.topStrategies[0].charAt(0).toUpperCase() + patterns.topStrategies[0].slice(1)}
-                      </Text>
+                  {/* Strategy Pairing */}
+                  {patterns.bestPairing && (
+                    <View style={styles.pairingSection}>
+                      <View style={[styles.chip, { backgroundColor: theme.primarySoft }]}>
+                        <Text style={[styles.chipText, { color: theme.primary }]}>
+                          {patterns.bestPairing.trigger.charAt(0).toUpperCase() + patterns.bestPairing.trigger.slice(1)}
+                        </Text>
+                      </View>
+                      <Feather name="arrow-right" size={16} color={theme.textMuted} />
+                      <View style={[styles.chip, { backgroundColor: theme.accentSoft }]}>
+                        <Text style={[styles.chipText, { color: theme.accent }]}>
+                          {patterns.bestPairing.strategy.charAt(0).toUpperCase() + patterns.bestPairing.strategy.slice(1)}
+                        </Text>
+                      </View>
                     </View>
-                  </View>
+                  )}
                 </View>
+              ) : (
+                <Text style={[styles.emptyPatternsText, { color: theme.textMuted }]}>
+                  Use the urge timer to track what works
+                </Text>
               )}
+            </Card>
 
-              {/* Strategy Pairing */}
-              {patterns.bestPairing && (
-                <View style={styles.pairingSection}>
-                  <View style={[styles.chip, { backgroundColor: theme.primarySoft }]}>
-                    <Text style={[styles.chipText, { color: theme.primary }]}>
-                      {patterns.bestPairing.trigger.charAt(0).toUpperCase() + patterns.bestPairing.trigger.slice(1)}
-                    </Text>
-                  </View>
-                  <Feather name="arrow-right" size={16} color={theme.textMuted} />
-                  <View style={[styles.chip, { backgroundColor: theme.accentSoft }]}>
-                    <Text style={[styles.chipText, { color: theme.accent }]}>
-                      {patterns.bestPairing.strategy.charAt(0).toUpperCase() + patterns.bestPairing.strategy.slice(1)}
-                    </Text>
-                  </View>
+            {/* Suggested Action - Premium */}
+            <Card style={styles.actionCard}>
+              <View style={styles.actionHeader}>
+                <View style={[styles.patternsIcon, { backgroundColor: theme.secondarySoft }]}>
+                  <Feather name="target" size={18} color={theme.secondary} />
                 </View>
-              )}
-            </View>
-          ) : (
-            <View style={styles.visualPatterns}>
-              {/* Success Rate */}
-              <View style={styles.successRateSection}>
-                <View style={styles.successRateHeader}>
-                  <Text style={[styles.successRateValue, { color: theme.accent }]}>78%</Text>
-                  <Text style={[styles.successRateLabel, { color: theme.textTertiary }]}>urges surfed</Text>
-                </View>
-                <View style={[styles.progressBarBg, { backgroundColor: theme.border }]}>
-                  <View style={[styles.progressBarFill, { backgroundColor: theme.accent, width: '78%' }]} />
+                <Text style={[styles.patternsTitle, { color: theme.text }]}>
+                  Try This
+                </Text>
+              </View>
+              <Text style={[styles.actionText, { color: theme.textSecondary }]}>
+                {patterns.suggestedAction || 'Keep tracking to get personalized suggestions'}
+              </Text>
+            </Card>
+
+            {/* Detailed Charts - Premium */}
+            <View style={styles.chartsSection}>
+              <View style={styles.chartsSectionHeader}>
+                <View style={styles.chartsTitleRow}>
+                  <View style={[styles.patternsIcon, { backgroundColor: theme.primarySoft }]}>
+                    <Feather name="bar-chart-2" size={18} color={theme.primary} />
+                  </View>
+                  <Text style={[styles.patternsTitle, { color: theme.text }]}>
+                    Detailed Charts
+                  </Text>
                 </View>
               </View>
-
-              {/* Top Strategy */}
-              <View style={styles.patternSection}>
-                <Text style={[styles.patternSectionLabel, { color: theme.textTertiary }]}>Best strategy</Text>
-                <View style={styles.chipRow}>
-                  <View style={[styles.chip, { backgroundColor: theme.accentSoft }]}>
-                    <Feather name="heart" size={14} color={theme.accent} />
-                    <Text style={[styles.chipText, { color: theme.accent }]}>Deep breathing</Text>
-                  </View>
-                </View>
-              </View>
-
-              {/* Strategy Pairing */}
-              <View style={styles.pairingSection}>
-                <View style={[styles.chip, { backgroundColor: theme.primarySoft }]}>
-                  <Text style={[styles.chipText, { color: theme.primary }]}>Stressed</Text>
-                </View>
-                <Feather name="arrow-right" size={16} color={theme.textMuted} />
-                <View style={[styles.chip, { backgroundColor: theme.accentSoft }]}>
-                  <Text style={[styles.chipText, { color: theme.accent }]}>Go for a walk</Text>
-                </View>
+              <View style={styles.chartsContainer}>
+                <Card style={styles.chartCard}>
+                  <TrendChart logs={filteredLogs} urges={filteredUrges} weeks={4} />
+                </Card>
+                <Card style={styles.chartCard}>
+                  <EmotionBreakdown
+                    logs={filteredLogs}
+                    urgeCheckIns={filteredUrgeCheckIns}
+                    urges={filteredUrges}
+                    limit={5}
+                  />
+                </Card>
+                <Card style={styles.chartCard}>
+                  <TimeHeatmap logs={filteredLogs} />
+                </Card>
+                <Card style={styles.chartCard}>
+                  <DayPatterns logs={filteredLogs} urges={filteredUrges} />
+                </Card>
               </View>
             </View>
-          )}
-        </Card>
-
-        {/* Suggested Action */}
-        <Card style={styles.actionCard}>
-          <View style={styles.actionHeader}>
-            <View style={[styles.patternsIcon, { backgroundColor: theme.secondarySoft }]}>
-              <Feather name="target" size={18} color={theme.secondary} />
-            </View>
-            <Text style={[styles.patternsTitle, { color: theme.text }]}>
-              Try This
-            </Text>
-          </View>
-          <Text style={[styles.actionText, { color: theme.textSecondary }]}>
-            {patterns.suggestedAction || 'Have a plan ready for Sunday evenings'}
-          </Text>
-        </Card>
+          </>
+        ) : (
+          /* Premium Insights - Big upgrade CTA */
+          <PaywallLock feature="detailed_charts" message="Unlock Premium Insights" />
+        )}
 
         {/* Encouragement */}
         <View style={styles.encouragementContainer}>
@@ -701,6 +740,13 @@ export default function InsightsScreen() {
           </Text>
         </View>
       </ScrollView>
+
+      {/* Upgrade Modal */}
+      <UpgradeModal
+        visible={upgradeModalVisible}
+        feature={currentFeature}
+        onClose={hideUpgradePrompt}
+      />
     </SafeAreaView>
   );
 }
@@ -1022,5 +1068,58 @@ const styles = StyleSheet.create({
   encouragementText: {
     fontSize: FontSize.sm,
     fontStyle: 'italic',
+  },
+  // Unlock History styles
+  unlockHistoryCard: {
+    marginBottom: Spacing.lg,
+  },
+  unlockHistoryContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  unlockHistoryIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  unlockHistoryText: {
+    flex: 1,
+    marginLeft: Spacing.md,
+  },
+  unlockHistoryTitle: {
+    fontSize: FontSize.md,
+    fontWeight: FontWeight.semibold,
+  },
+  unlockHistorySubtitle: {
+    fontSize: FontSize.sm,
+    marginTop: 2,
+  },
+  // Charts section styles
+  chartsSection: {
+    marginBottom: Spacing.lg,
+  },
+  chartsSectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing.md,
+  },
+  chartsTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  chartsContainer: {
+    gap: Spacing.md,
+  },
+  chartCard: {
+    marginBottom: 0,
+  },
+  emptyPatternsText: {
+    fontSize: FontSize.sm,
+    textAlign: 'center',
+    paddingVertical: Spacing.md,
   },
 });

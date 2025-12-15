@@ -89,6 +89,32 @@ export interface AppState {
   selectedLocations: string[];
   lastCheckIn?: number;
   notificationsEnabled: boolean;
+  subscription: Subscription;
 }
 
 export type ThemeMode = 'light' | 'dark' | 'system';
+
+// Premium subscription types
+export type SubscriptionTier = 'free' | 'premium';
+export type SubscriptionSource = 'apple' | 'google' | 'promo' | 'dev';
+
+export interface Subscription {
+  tier: SubscriptionTier;
+  expiresAt?: number;  // timestamp, undefined = lifetime
+  purchasedAt?: number;
+  source?: SubscriptionSource;
+}
+
+export type PremiumFeature =
+  | 'unlimited_history'
+  | 'detailed_charts'
+  | 'predictive_alerts'
+  | 'ai_coach'
+  | 'export_reports';
+
+export interface PredictiveAlert {
+  type: 'warning' | 'info' | 'success';
+  message: string;
+  suggestion?: string;
+  dismissedAt?: number;
+}

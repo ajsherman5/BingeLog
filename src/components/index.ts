@@ -10,3 +10,7 @@ export { MilestoneModal } from './MilestoneModal';
 export { UrgeCheckIn } from './UrgeCheckIn';
 export { JourneyCard } from './JourneyCard';
 export { StatsCard } from './StatsCard';
+export { UpgradeModal } from './UpgradeModal';
+export { PremiumBadge } from './PremiumBadge';
+export { PaywallLock } from './PaywallLock';
+export { PredictiveAlert } from './PredictiveAlert';

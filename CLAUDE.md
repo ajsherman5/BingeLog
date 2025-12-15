@@ -7,10 +7,11 @@ BingeLog is a React Native/Expo app designed to help users track and understand 
 - **Framework:** React Native with Expo (managed workflow)
 - **Routing:** Expo Router (file-based routing)
 - **Language:** TypeScript
-- **State Management:** React Context (AppContext, ThemeContext)
+- **State Management:** React Context (AppContext, ThemeContext, PremiumContext)
 - **Storage:** AsyncStorage for local persistence
 - **Icons:** @expo/vector-icons (Feather icons)
 - **Notifications:** expo-notifications
+- **Animations:** expo-linear-gradient (for premium UI)
 
 ## Project Structure
 ```
@@ -30,14 +31,40 @@ app/                    # Expo Router pages
 
 src/
 ├── components/        # Reusable UI components
+│   ├── index.ts       # Component exports
+│   ├── Button.tsx
+│   ├── Card.tsx
+│   ├── Chip.tsx
+│   ├── FloatingActionButton.tsx
+│   ├── JourneyCard.tsx
+│   ├── MilestoneModal.tsx
+│   ├── PaywallLock.tsx      # Premium upgrade CTA component
+│   ├── PredictiveAlert.tsx  # AI-powered contextual warnings
+│   ├── PremiumBadge.tsx     # Small PRO badge
+│   ├── ProgressRing.tsx
+│   ├── StatsCard.tsx
+│   ├── StreakBadge.tsx
+│   ├── StreakCard.tsx
+│   ├── UpgradeModal.tsx     # Full upgrade modal
+│   ├── UrgeCheckIn.tsx
+│   ├── WeekStrip.tsx
+│   └── charts/              # Premium chart components
+│       ├── index.ts
+│       ├── DayPatterns.tsx
+│       ├── EmotionBreakdown.tsx
+│       ├── TimeHeatmap.tsx
+│       └── TrendChart.tsx
 ├── constants/
 │   ├── data.ts       # App data (emotions, locations, triggers, journeys, milestones)
+│   ├── premium.ts    # Premium feature definitions
 │   └── theme.ts      # Design tokens (colors, spacing, typography)
 ├── context/
-│   ├── AppContext.tsx    # Global app state (logs, urges, stats, check-ins)
-│   └── ThemeContext.tsx  # Theme state (dark/light mode)
+│   ├── AppContext.tsx      # Global app state (logs, urges, stats, check-ins, subscription)
+│   ├── PremiumContext.tsx  # Premium feature gating and upgrade prompts
+│   └── ThemeContext.tsx    # Theme state (dark/light mode)
 ├── services/
-│   └── ai.ts         # AI service stubs (for future implementation)
+│   ├── ai.ts              # AI service stubs (for future implementation)
+│   └── predictions.ts     # Predictive alert logic
 ├── types/
 │   └── index.ts      # TypeScript interfaces
 └── utils/
@@ -48,9 +75,11 @@ src/
 
 ### 1. Home Screen (`app/(tabs)/index.tsx`)
 - Displays current streak and stats
+- **Pro button** in header (for non-premium users) - opens upgrade modal
 - Quick action buttons: Log Binge, Surf Urge, Check In
 - Week strip showing recent activity
 - Milestone celebrations
+- **Predictive alerts** (premium) - contextual warnings based on patterns
 
 ### 2. Binge Logging (`app/log.tsx`)
 - Multi-select emotions and location
@@ -70,9 +99,13 @@ src/
 ### 4. Insights Tab (`app/(tabs)/progress.tsx`)
 **Visual, scannable design with minimal text:**
 
+**Free tier features:**
 - **Stats Row:** Binge-free time, urges surfed (with "vs last week" trend), best streak (with "new record!" indicator)
 - **Streak Calendar:** 14-day visual showing binge-free days
 - **Personal Bests:** Badge-style display with icons (award, zap)
+- **Unlock History prompt** (if user has data older than 30 days)
+
+**Premium tier features (behind PaywallLock):**
 - **Your Patterns:** Chip-based display showing:
   - Top triggers (with alert-circle icons)
   - Peak time (with clock icon)
@@ -82,9 +115,17 @@ src/
   - Best strategy chip with heart icon
   - Strategy pairing: "Trigger → Strategy" visual
 - **Try This:** Suggested action based on patterns
-- **Encouragement:** Motivational message at bottom
+- **Detailed Charts:**
+  - TrendChart - Weekly/monthly line chart
+  - EmotionBreakdown - Pie/bar chart of triggers
+  - TimeHeatmap - Day/time grid visualization
+  - DayPatterns - Bar chart of weekly patterns
 
-**Filler data is shown when no real data exists** to preview the UI.
+**PaywallLock Component:**
+- Big, prominent purple gradient card
+- Feature checklist with checkmarks
+- "Upgrade to Pro" CTA button
+- Impossible to miss - designed to convert
 
 ### 5. Daily Check-ins (`app/checkin.tsx`)
 - Urge intensity tracking (1-5 scale)
@@ -99,13 +140,51 @@ src/
 ### 7. Settings (`app/(tabs)/settings.tsx`)
 - Theme toggle (dark/light)
 - Notification preferences
-- Data export/reset options
+- **Premium section:**
+  - Shows upgrade CTA for free users
+  - Shows "Premium Active" status for premium users
+  - Dev toggle to enable/disable premium (for testing)
+- Data management:
+  - Export data
+  - Clear all data (properly resets both AsyncStorage AND in-memory state)
+
+## Premium System
+
+### Subscription State (`src/types/index.ts`)
+```typescript
+type SubscriptionTier = 'free' | 'premium';
+type SubscriptionSource = 'apple' | 'google' | 'dev' | 'promo';
+
+interface Subscription {
+  tier: SubscriptionTier;
+  expiresAt?: number;
+  purchasedAt?: number;
+  source?: SubscriptionSource;
+}
+```
+
+### Premium Features
+Defined in `src/constants/premium.ts`:
+- `unlimited_history` - Access data beyond 30 days
+- `detailed_charts` - Full analytics and visualizations
+- `ai_insights` - Predictive alerts and recommendations
+
+### Premium Context (`src/context/PremiumContext.tsx`)
+- `isPremium` - boolean check
+- `canAccess(feature)` - feature-specific gating
+- `showUpgradePrompt(feature)` - triggers upgrade modal
+- `upgradeModalVisible` / `hideUpgradePrompt` - modal state
+
+### Free vs Premium Limits
+- **History:** Free = 30 days, Premium = unlimited
+- **Insights:** Free = basic stats only, Premium = full patterns & charts
+- **Predictive Alerts:** Premium only
 
 ## Data Models (src/types/index.ts)
 
-### LogEntry
+### BingeLog
 ```typescript
-interface LogEntry {
+interface BingeLog {
   id: string;
   timestamp: number;
   emotions: string[];
@@ -121,8 +200,7 @@ interface UrgeEntry {
   timestamp: number;
   surfed: boolean;
   duration?: number;
-  // Reflection data (when surfed = true)
-  intensity?: 1 | 2 | 3 | 4 | 5;
+  intensity?: UrgeIntensity;
   triggersPresent?: string[];
   copingStrategies?: string[];
   reflectionNote?: string;
@@ -134,8 +212,9 @@ interface UrgeEntry {
 interface UrgeCheckIn {
   id: string;
   timestamp: number;
-  intensity: 1 | 2 | 3 | 4 | 5;
+  intensity: UrgeIntensity;
   triggers: string[];
+  note?: string;
 }
 ```
 
@@ -144,9 +223,11 @@ interface UrgeCheckIn {
 interface UserStats {
   currentStreak: number;
   longestStreak: number;
-  totalLogs: number;
-  urgesSurfed: number;
   lastBingeDate: number | null;
+  urgesSurfed: number;
+  totalUrges: number;
+  totalBinges: number;
+  milestonesAchieved: string[];
 }
 ```
 
@@ -158,14 +239,15 @@ interface UserStats {
 
 3. **Visual chip-based UI for Insights** - Replaced text-heavy paragraphs with scannable visual elements (chips, progress bars, icons) to reduce cognitive load
 
-4. **Filler data for UI preview** - Shows sample data when user has no entries so they can see what the full UI looks like
+4. **Premium feature gating** - Free users see basic stats, premium users get full insights, charts, and predictive alerts
 
-5. **Trend indicators:**
-   - "vs last week" on urges surfed (comparing week-over-week)
-   - "new record!" on best streak (when current streak >= longest streak)
-   - Removed confusing trend from binge-free stat
+5. **Big, prominent PaywallLock** - Purple gradient card with feature list that's impossible to miss, designed to convert free users
 
-6. **Strategy pairing visualization** - Shows "Trigger → Strategy" relationship to help users understand what works for them
+6. **Pro button in header** - Small upgrade prompt always visible on home screen for non-premium users
+
+7. **Proper data reset** - `resetAllData()` function clears both AsyncStorage AND in-memory React state
+
+8. **Predictive alerts** - AI-powered contextual warnings based on historical patterns (e.g., "Sunday evenings have been challenging")
 
 ## Constants (src/constants/data.ts)
 
@@ -177,6 +259,7 @@ interface UserStats {
 - `MILESTONES`: Streak, urges surfed, and logging achievements
 - `JOURNEYS`: 4 multi-day self-care programs
 - `TIME_WINDOWS`: Morning, Afternoon, Evening, Night definitions
+- `DAYS_OF_WEEK`: Day name constants
 
 ## Theme (src/constants/theme.ts)
 
@@ -191,8 +274,23 @@ npm install
 npx expo start
 ```
 
-## Future Considerations
-- AI-powered insights (stubs in src/services/ai.ts)
-- Cloud sync for data backup
-- More detailed analytics/charts
-- Social features or therapist sharing
+## Next Steps (TODO)
+1. **Onboarding flow** - Improve first-time user experience
+2. **Payment integration** - RevenueCat or expo-in-app-purchases for real payments
+3. **Testing** - Thorough testing of all features
+4. **App Store submission** - Prepare for Apple review
+
+## Session Notes
+
+### Latest Session (Premium System Implementation)
+- Implemented full premium subscription system
+- Added subscription state to AppContext
+- Created PremiumContext for feature gating
+- Built premium UI components (UpgradeModal, PaywallLock, PremiumBadge)
+- Added premium section to Settings with dev toggle
+- Gated Insights features (patterns, charts, suggestions) behind premium
+- Created chart components (TrendChart, EmotionBreakdown, TimeHeatmap, DayPatterns)
+- Added predictive alerts for premium users
+- Fixed "Clear All Data" to properly reset all state
+- Redesigned PaywallLock as big, prominent upgrade CTA
+- Added "Pro" button to home screen header

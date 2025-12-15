@@ -10,6 +10,8 @@ import {
   JourneyProgress,
   UrgeIntensity,
   Milestone,
+  Subscription,
+  SubscriptionSource,
 } from '../types';
 import { EMOTIONS, LOCATIONS, MILESTONES } from '../constants/data';
 import { schedulePredictiveNotifications } from '../utils/notifications';
@@ -33,6 +35,12 @@ interface AppContextType extends AppState {
   newMilestones: Milestone[];
   clearNewMilestones: () => void;
   getMostCommonTrigger: () => string | null;
+  // Premium subscription
+  isPremium: boolean;
+  upgradeToPremium: (source: SubscriptionSource) => void;
+  restorePurchase: () => Promise<boolean>;
+  // Data management
+  resetAllData: () => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -49,6 +57,10 @@ const initialStats: UserStats = {
   milestonesAchieved: [],
 };
 
+const initialSubscription: Subscription = {
+  tier: 'free',
+};
+
 const initialState: AppState = {
   logs: [],
   urgeCheckIns: [],
@@ -60,6 +72,7 @@ const initialState: AppState = {
   selectedLocations: LOCATIONS.slice(0, 5),
   lastCheckIn: undefined,
   notificationsEnabled: false,
+  subscription: initialSubscription,
 };
 
 export function AppProvider({ children }: { children: ReactNode }) {
@@ -87,6 +100,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           ...initialState,
           ...parsed,
           stats: { ...initialStats, ...parsed.stats },
+          subscription: { ...initialSubscription, ...parsed.subscription },
         });
       }
     } catch (error) {
@@ -376,6 +390,43 @@ export function AppProvider({ children }: { children: ReactNode }) {
     ? Math.floor((Date.now() - state.stats.lastBingeDate) / (1000 * 60 * 60 * 24))
     : 0;
 
+  // Check if subscription is premium and not expired
+  const isPremium = state.subscription.tier === 'premium' && (
+    !state.subscription.expiresAt || state.subscription.expiresAt > Date.now()
+  );
+
+  const upgradeToPremium = (source: SubscriptionSource) => {
+    setState((prev) => ({
+      ...prev,
+      subscription: {
+        tier: 'premium',
+        purchasedAt: Date.now(),
+        source,
+        // For dev/promo, set to lifetime (no expiry)
+        expiresAt: source === 'dev' || source === 'promo' ? undefined : Date.now() + 365 * 24 * 60 * 60 * 1000,
+      },
+    }));
+    triggerHaptic('success');
+  };
+
+  const restorePurchase = async (): Promise<boolean> => {
+    // TODO: Implement actual restore with RevenueCat/IAP
+    // For now, just return false (no purchase to restore)
+    return false;
+  };
+
+  const resetAllData = async (): Promise<void> => {
+    try {
+      // Clear AsyncStorage
+      await AsyncStorage.clear();
+      // Reset in-memory state to initial values
+      setState(initialState);
+      setNewMilestones([]);
+    } catch (error) {
+      console.error('Failed to reset data:', error);
+    }
+  };
+
   if (!isLoaded) {
     return null;
   }
@@ -407,6 +458,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         newMilestones,
         clearNewMilestones,
         getMostCommonTrigger,
+        isPremium,
+        upgradeToPremium,
+        restorePurchase,
+        resetAllData,
       }}
     >
       {children}

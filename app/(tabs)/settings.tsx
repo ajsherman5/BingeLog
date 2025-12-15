@@ -12,17 +12,18 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../../src/context/ThemeContext';
 import { useApp } from '../../src/context/AppContext';
-import { Card, Chip } from '../../src/components';
+import { usePremium } from '../../src/context/PremiumContext';
+import { Card, Chip, UpgradeModal } from '../../src/components';
 import { EMOTIONS, LOCATIONS } from '../../src/constants/data';
-import { ThemeMode } from '../../src/types';
+import { PREMIUM_FEATURES } from '../../src/constants/premium';
+import { ThemeMode, PremiumFeature } from '../../src/types';
 import { Spacing, FontSize, FontWeight, BorderRadius } from '../../src/constants/theme';
 import { enableAllNotifications, disableAllNotifications, schedulePredictiveNotifications } from '../../src/utils/notifications';
 import { setAIApiKey, getAIApiKey, hasAIApiKey } from '../../src/services/ai';
 
-type SettingsView = 'main' | 'theme' | 'emotions' | 'locations' | 'ai';
+type SettingsView = 'main' | 'theme' | 'emotions' | 'locations' | 'ai' | 'premium';
 
 export default function SettingsScreen() {
   const router = useRouter();
@@ -37,7 +38,12 @@ export default function SettingsScreen() {
     notificationsEnabled,
     setNotificationsEnabled,
     triggerHaptic,
+    isPremium,
+    upgradeToPremium,
+    subscription,
+    resetAllData,
   } = useApp();
+  const { showUpgradePrompt, upgradeModalVisible, hideUpgradePrompt, currentFeature } = usePremium();
 
   const [view, setView] = useState<SettingsView>('main');
   const [tempEmotions, setTempEmotions] = useState<string[]>(selectedEmotions);
@@ -124,7 +130,7 @@ export default function SettingsScreen() {
           text: 'Clear Data',
           style: 'destructive',
           onPress: async () => {
-            await AsyncStorage.clear();
+            await resetAllData();
             router.replace('/onboarding');
           },
         },
@@ -320,6 +326,121 @@ export default function SettingsScreen() {
     );
   }
 
+  if (view === 'premium') {
+    const premiumFeaturesList = Object.values(PREMIUM_FEATURES);
+    const subscriptionDate = subscription.purchasedAt
+      ? new Date(subscription.purchasedAt).toLocaleDateString()
+      : null;
+
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+        <View style={styles.subHeader}>
+          <TouchableOpacity onPress={() => setView('main')} style={styles.headerButton}>
+            <Feather name="arrow-left" size={24} color={theme.text} />
+          </TouchableOpacity>
+          <Text style={[styles.subTitle, { color: theme.text }]}>Premium</Text>
+          <View style={styles.headerButton} />
+        </View>
+        <ScrollView style={styles.content}>
+          {/* Premium Status Card */}
+          <Card style={styles.premiumStatusCard}>
+            <View style={[styles.premiumStatusIcon, { backgroundColor: isPremium ? theme.accentSoft : theme.primarySoft }]}>
+              <Feather name={isPremium ? 'check-circle' : 'star'} size={32} color={isPremium ? theme.accent : theme.primary} />
+            </View>
+            <Text style={[styles.premiumStatusTitle, { color: theme.text }]}>
+              {isPremium ? 'Premium Active' : 'Free Plan'}
+            </Text>
+            <Text style={[styles.premiumStatusSubtitle, { color: theme.textSecondary }]}>
+              {isPremium
+                ? subscription.expiresAt
+                  ? `Valid until ${new Date(subscription.expiresAt).toLocaleDateString()}`
+                  : 'Lifetime access'
+                : 'Upgrade to unlock all features'}
+            </Text>
+          </Card>
+
+          {/* Features List */}
+          <Text style={[styles.sectionTitle, { color: theme.textTertiary, marginTop: Spacing.xl }]}>
+            FEATURES
+          </Text>
+          {premiumFeaturesList.map((feature) => (
+            <Card key={feature.id} style={[styles.featureCard, { marginBottom: Spacing.sm }]}>
+              <View style={[styles.featureIcon, { backgroundColor: theme.primarySoft }]}>
+                <Feather name={feature.icon as any} size={18} color={theme.primary} />
+              </View>
+              <View style={styles.featureContent}>
+                <Text style={[styles.featureTitle, { color: theme.text }]}>{feature.name}</Text>
+                <Text style={[styles.featureDescription, { color: theme.textTertiary }]}>
+                  {feature.description}
+                </Text>
+              </View>
+              {isPremium ? (
+                <View style={[styles.featureUnlocked, { backgroundColor: theme.accentSoft }]}>
+                  <Feather name="check" size={14} color={theme.accent} />
+                </View>
+              ) : (
+                <View style={[styles.featureLocked, { backgroundColor: theme.borderLight }]}>
+                  <Feather name="lock" size={14} color={theme.textMuted} />
+                </View>
+              )}
+            </Card>
+          ))}
+
+          {/* Upgrade/Restore Buttons */}
+          {!isPremium && (
+            <View style={styles.premiumActions}>
+              <TouchableOpacity
+                style={[styles.upgradeButton, { backgroundColor: theme.primary }]}
+                onPress={() => showUpgradePrompt('unlimited_history')}
+              >
+                <Text style={[styles.upgradeButtonText, { color: '#FFFFFF' }]}>
+                  Upgrade to Premium
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.restoreButton}>
+                <Text style={[styles.restoreText, { color: theme.textTertiary }]}>
+                  Restore Purchases
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* Dev Toggle (for testing) */}
+          {__DEV__ && (
+            <>
+              <Text style={[styles.sectionTitle, { color: theme.textTertiary, marginTop: Spacing.xl }]}>
+                DEVELOPER
+              </Text>
+              <Card style={styles.menuCard}>
+                <View style={styles.notificationRow}>
+                  <View style={styles.notificationText}>
+                    <Text style={[styles.menuLabel, { color: theme.text }]}>Premium Mode</Text>
+                    <Text style={[styles.notificationHint, { color: theme.textTertiary }]}>
+                      Toggle for testing
+                    </Text>
+                  </View>
+                  <Switch
+                    value={isPremium}
+                    onValueChange={(value) => {
+                      if (value) {
+                        upgradeToPremium('dev');
+                      } else {
+                        // For dev, we can manually reset (would need to add a method)
+                        Alert.alert('Dev Mode', 'Clear app data to reset premium status');
+                      }
+                    }}
+                    trackColor={{ false: theme.borderLight, true: theme.primaryLight }}
+                    thumbColor={isPremium ? theme.primary : theme.surface}
+                  />
+                </View>
+              </Card>
+            </>
+          )}
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
@@ -440,6 +561,33 @@ export default function SettingsScreen() {
           </Card>
         </TouchableOpacity>
 
+        {/* Premium Section */}
+        <Text style={[styles.sectionTitle, { color: theme.textTertiary }]}>PREMIUM</Text>
+        <TouchableOpacity onPress={() => setView('premium')}>
+          <Card style={styles.menuCard}>
+            <View style={styles.aiMenuContent}>
+              <View style={[styles.aiMenuIcon, { backgroundColor: isPremium ? theme.accentSoft : theme.primarySoft }]}>
+                <Feather name={isPremium ? 'check-circle' : 'star'} size={16} color={isPremium ? theme.accent : theme.primary} />
+              </View>
+              <View style={styles.aiMenuText}>
+                <Text style={[styles.menuLabel, { color: theme.text }]}>
+                  {isPremium ? 'Premium Active' : 'BingeLog Premium'}
+                </Text>
+                <Text style={[styles.notificationHint, { color: theme.textTertiary }]}>
+                  {isPremium ? 'All features unlocked' : 'Unlock all features'}
+                </Text>
+              </View>
+              {isPremium ? (
+                <View style={[styles.aiStatusBadge, { backgroundColor: theme.accentSoft }]}>
+                  <Feather name="check" size={12} color={theme.accent} />
+                </View>
+              ) : (
+                <Feather name="chevron-right" size={18} color={theme.textMuted} />
+              )}
+            </View>
+          </Card>
+        </TouchableOpacity>
+
         {/* Data Section */}
         <Text style={[styles.sectionTitle, { color: theme.textTertiary }]}>DATA</Text>
         <TouchableOpacity onPress={handleClearData}>
@@ -458,6 +606,13 @@ export default function SettingsScreen() {
           </Text>
         </View>
       </ScrollView>
+
+      {/* Upgrade Modal */}
+      <UpgradeModal
+        visible={upgradeModalVisible}
+        feature={currentFeature}
+        onClose={hideUpgradePrompt}
+      />
     </SafeAreaView>
   );
 }
@@ -689,5 +844,84 @@ const styles = StyleSheet.create({
   removeKeyText: {
     fontSize: FontSize.md,
     fontWeight: FontWeight.medium,
+  },
+  // Premium detail view styles
+  premiumStatusCard: {
+    alignItems: 'center',
+    paddingVertical: Spacing.xl,
+  },
+  premiumStatusIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: Spacing.md,
+  },
+  premiumStatusTitle: {
+    fontSize: FontSize.xl,
+    fontWeight: FontWeight.semibold,
+    marginBottom: Spacing.xs,
+  },
+  premiumStatusSubtitle: {
+    fontSize: FontSize.sm,
+  },
+  featureCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  featureIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  featureContent: {
+    flex: 1,
+    marginLeft: Spacing.md,
+  },
+  featureTitle: {
+    fontSize: FontSize.md,
+    fontWeight: FontWeight.medium,
+  },
+  featureDescription: {
+    fontSize: FontSize.xs,
+    marginTop: 2,
+  },
+  featureUnlocked: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  featureLocked: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  premiumActions: {
+    marginTop: Spacing.xl,
+    alignItems: 'center',
+  },
+  upgradeButton: {
+    width: '100%',
+    paddingVertical: Spacing.lg,
+    borderRadius: BorderRadius.lg,
+    alignItems: 'center',
+  },
+  upgradeButtonText: {
+    fontSize: FontSize.md,
+    fontWeight: FontWeight.semibold,
+  },
+  restoreButton: {
+    marginTop: Spacing.lg,
+    padding: Spacing.sm,
+  },
+  restoreText: {
+    fontSize: FontSize.sm,
   },
 });
