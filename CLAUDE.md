@@ -280,9 +280,80 @@ npx expo start
 3. **Testing** - Thorough testing of all features
 4. **App Store submission** - Prepare for Apple review
 
+---
+
+## Marketing Strategy
+
+### Target Audience
+- Women/girls ages 13-50
+- Both those actively seeking help AND raising awareness
+- Key differentiator: Binge eating ONLY (not weight loss, not general ED)
+
+### Positioning
+- **Tagline ideas:**
+  - "Understand your patterns. Not restrict them."
+  - "Awareness, not shame."
+  - "The only app built specifically for binge eating."
+
+### Pricing Structure
+| Tier | Price | Notes |
+|------|-------|-------|
+| Free | $0 | Basic tracking, 14-day calendar, streak |
+| Pro Monthly | $4.99/mo | Full insights, charts, patterns |
+| Pro Yearly | $29.99/yr | ~$2.50/mo (50% savings) |
+| Free Trial | 7 days | Full Pro access |
+
+### Launch Goal
+- **100 downloads in 30 days**
+
+### Low-Cost Marketing Tactics (Under $200)
+
+**Free Tactics:**
+1. **Reddit** - Post genuinely in r/BingeEatingDisorder, r/EDrecovery, r/loseit. Share story building the app, ask for beta testers.
+2. **Facebook Groups** - Binge eating support groups. Be genuine, offer free premium for feedback.
+3. **TikTok organic** - Post 1-2x daily. "I built an app for binge eating because nothing else existed." Authenticity > polish.
+4. **Product Hunt** - Launch for free exposure to early adopters.
+5. **Nano-influencers for free premium** - DM 20-30 small creators (1K-5K followers) offering lifetime premium in exchange for honest post.
+6. **App review sites** - Submit to AppAdvice, 148Apps, etc.
+
+**Paid ($100-200):**
+- Boost 1-2 best-performing TikToks ($50-100)
+- Pay ONE authentic nano-influencer who struggles with binge eating ($50-100)
+
+### Expected Results
+| Channel | Cost | Expected Downloads |
+|---------|------|-------------------|
+| Reddit/Facebook groups | Free | 20-40 |
+| Organic TikTok | Free | 10-30 |
+| Free premium exchanges | Free | 10-20 |
+| 1 paid nano-influencer | $50-100 | 10-20 |
+| **Total** | **~$100** | **50-100+** |
+
+### App Store Optimization (ASO)
+**App Name:** BingeLog - Binge Eating Tracker
+
+**Keywords:** binge eating, binge eating disorder, BED tracker, emotional eating, urge surfing, eating disorder recovery
+
+**Screenshots needed:**
+1. Streak/home screen - "Track your progress"
+2. Urge timer - "Surf urges with the 90-second timer"
+3. Insights - "Discover your patterns"
+4. Check-in - "Quick daily check-ins"
+5. Premium features - "Unlock deep insights"
+
+### Social Media
+- **Platforms:** TikTok (13-30 age), Instagram (25-50 age)
+- **Hashtags:** #bingeeating #bingeeatingrecovery #BED #emotionaleating #edrecovery #mentalhealth #selfcompassion
+- **Content ideas:**
+  - "POV: You finally understand WHY you binge"
+  - "Things that trigger binge eating" (relatable list)
+  - "The 90-second rule for urges" (educational)
+
+---
+
 ## Session Notes
 
-### Latest Session (Premium System Implementation)
+### Latest Session (Premium System + Marketing)
 - Implemented full premium subscription system
 - Added subscription state to AppContext
 - Created PremiumContext for feature gating
@@ -294,3 +365,4 @@ npx expo start
 - Fixed "Clear All Data" to properly reset all state
 - Redesigned PaywallLock as big, prominent upgrade CTA
 - Added "Pro" button to home screen header
+- Developed marketing strategy (low-cost, influencer-based, $100-200 budget)
