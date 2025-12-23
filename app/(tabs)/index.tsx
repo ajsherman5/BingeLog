@@ -4,7 +4,6 @@ import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { useTheme } from '../../src/context/ThemeContext';
 import { useApp } from '../../src/context/AppContext';
-import { usePremium } from '../../src/context/PremiumContext';
 import {
   Card,
   WeekStrip,
@@ -29,18 +28,16 @@ export default function HomeScreen() {
     clearNewMilestones,
     triggerHaptic,
     getMostCommonTrigger,
-    isPremium,
   } = useApp();
 
-  const { showUpgradePrompt } = usePremium();
   const [showMilestone, setShowMilestone] = useState(false);
   const [alertDismissed, setAlertDismissed] = useState(false);
 
-  // Get predictive alert for premium users
+  // Get predictive alert
   const predictiveAlert = useMemo(() => {
-    if (!isPremium || alertDismissed) return null;
+    if (alertDismissed) return null;
     return getPredictiveAlert(logs, urgeCheckIns);
-  }, [isPremium, logs, urgeCheckIns, alertDismissed]);
+  }, [logs, urgeCheckIns, alertDismissed]);
 
   useEffect(() => {
     if (!isOnboarded) {
@@ -86,13 +83,10 @@ export default function HomeScreen() {
             </Text>
           </View>
           <View style={styles.headerButtons}>
-            {!isPremium && (
+            {false && (
               <TouchableOpacity
                 style={styles.proButton}
-                onPress={() => {
-                  triggerHaptic('light');
-                  showUpgradePrompt('detailed_charts');
-                }}
+                onPress={() => {}}
                 activeOpacity={0.8}
               >
                 <Feather name="award" size={14} color="#FFFFFF" />

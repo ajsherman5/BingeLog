@@ -5,16 +5,13 @@ import {
   StyleSheet,
   SafeAreaView,
   ScrollView,
-  TouchableOpacity,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useTheme } from '../../src/context/ThemeContext';
 import { useApp } from '../../src/context/AppContext';
-import { usePremium } from '../../src/context/PremiumContext';
-import { Card, UpgradeModal, PaywallLock } from '../../src/components';
+import { Card } from '../../src/components';
 import { TrendChart, EmotionBreakdown, TimeHeatmap, DayPatterns } from '../../src/components/charts';
 import { TIME_WINDOWS, DAYS_OF_WEEK } from '../../src/constants/data';
-import { FREE_HISTORY_DAYS } from '../../src/constants/premium';
 import { Spacing, FontSize, FontWeight, BorderRadius } from '../../src/constants/theme';
 
 const MIN_DATA_FOR_PATTERNS = 3;
@@ -23,45 +20,12 @@ type StrategyPairing = { trigger: string; strategy: string; count: number };
 
 export default function InsightsScreen() {
   const { theme } = useTheme();
-  const { logs, stats, urges, urgeCheckIns, isPremium } = useApp();
-  const { showUpgradePrompt, upgradeModalVisible, hideUpgradePrompt, currentFeature } = usePremium();
+  const { logs, stats, urges, urgeCheckIns } = useApp();
 
-  // Calculate history cutoff date (30 days ago)
-  const historyCutoff = useMemo(() => {
-    return Date.now() - (FREE_HISTORY_DAYS * 24 * 60 * 60 * 1000);
-  }, []);
-
-  // Check if user has data older than the free limit
-  const hasOlderData = useMemo(() => {
-    const oldLogs = logs.some(log => log.timestamp < historyCutoff);
-    const oldUrges = urges.some(urge => urge.timestamp < historyCutoff);
-    const oldCheckIns = urgeCheckIns.some(checkIn => checkIn.timestamp < historyCutoff);
-    return oldLogs || oldUrges || oldCheckIns;
-  }, [logs, urges, urgeCheckIns, historyCutoff]);
-
-  // Count older entries
-  const olderEntriesCount = useMemo(() => {
-    const oldLogs = logs.filter(log => log.timestamp < historyCutoff).length;
-    const oldUrges = urges.filter(urge => urge.timestamp < historyCutoff).length;
-    const oldCheckIns = urgeCheckIns.filter(checkIn => checkIn.timestamp < historyCutoff).length;
-    return oldLogs + oldUrges + oldCheckIns;
-  }, [logs, urges, urgeCheckIns, historyCutoff]);
-
-  // Filter data based on premium status
-  const filteredLogs = useMemo(() => {
-    if (isPremium) return logs;
-    return logs.filter(log => log.timestamp >= historyCutoff);
-  }, [logs, isPremium, historyCutoff]);
-
-  const filteredUrges = useMemo(() => {
-    if (isPremium) return urges;
-    return urges.filter(urge => urge.timestamp >= historyCutoff);
-  }, [urges, isPremium, historyCutoff]);
-
-  const filteredUrgeCheckIns = useMemo(() => {
-    if (isPremium) return urgeCheckIns;
-    return urgeCheckIns.filter(checkIn => checkIn.timestamp >= historyCutoff);
-  }, [urgeCheckIns, isPremium, historyCutoff]);
+  // Use all data (no filtering - app is fully paid)
+  const filteredLogs = logs;
+  const filteredUrges = urges;
+  const filteredUrgeCheckIns = urgeCheckIns;
 
   // Calculate time since last binge (granular)
   const timeSinceLastBinge = useMemo(() => {
@@ -514,32 +478,7 @@ export default function InsightsScreen() {
           </View>
         </Card>
 
-        {/* Unlock Full History - Show if user has older data and is not premium */}
-        {hasOlderData && !isPremium && (
-          <TouchableOpacity onPress={() => showUpgradePrompt('unlimited_history')}>
-            <Card style={[styles.unlockHistoryCard, { backgroundColor: theme.primarySoft }]}>
-              <View style={styles.unlockHistoryContent}>
-                <View style={[styles.unlockHistoryIcon, { backgroundColor: theme.primary }]}>
-                  <Feather name="clock" size={18} color="#FFFFFF" />
-                </View>
-                <View style={styles.unlockHistoryText}>
-                  <Text style={[styles.unlockHistoryTitle, { color: theme.primary }]}>
-                    Unlock Full History
-                  </Text>
-                  <Text style={[styles.unlockHistorySubtitle, { color: theme.text }]}>
-                    You have {olderEntriesCount} entries from before 30 days ago
-                  </Text>
-                </View>
-                <Feather name="chevron-right" size={20} color={theme.primary} />
-              </View>
-            </Card>
-          </TouchableOpacity>
-        )}
-
-        {/* Premium Insights Section */}
-        {isPremium ? (
-          <>
-            {/* Your Patterns - Premium */}
+        {/* Your Patterns */}
             <Card style={styles.patternsCard}>
               <View style={styles.patternsHeader}>
                 <View style={[styles.patternsIcon, { backgroundColor: theme.primarySoft }]}>
@@ -727,11 +666,6 @@ export default function InsightsScreen() {
                 </Card>
               </View>
             </View>
-          </>
-        ) : (
-          /* Premium Insights - Big upgrade CTA */
-          <PaywallLock feature="detailed_charts" message="Unlock Premium Insights" />
-        )}
 
         {/* Encouragement */}
         <View style={styles.encouragementContainer}>
@@ -740,13 +674,6 @@ export default function InsightsScreen() {
           </Text>
         </View>
       </ScrollView>
-
-      {/* Upgrade Modal */}
-      <UpgradeModal
-        visible={upgradeModalVisible}
-        feature={currentFeature}
-        onClose={hideUpgradePrompt}
-      />
     </SafeAreaView>
   );
 }
