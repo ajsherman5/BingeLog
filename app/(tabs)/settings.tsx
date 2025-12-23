@@ -42,6 +42,9 @@ export default function SettingsScreen() {
     upgradeToPremium,
     subscription,
     resetAllData,
+    user,
+    signOut,
+    setOnboarded,
   } = useApp();
   const { showUpgradePrompt, upgradeModalVisible, hideUpgradePrompt, currentFeature } = usePremium();
 
@@ -131,6 +134,25 @@ export default function SettingsScreen() {
           style: 'destructive',
           onPress: async () => {
             await resetAllData();
+            router.replace('/onboarding');
+          },
+        },
+      ]
+    );
+  };
+
+  const handleLogOut = () => {
+    Alert.alert(
+      'Log Out',
+      'You will need to sign in again to access the app.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Log Out',
+          style: 'destructive',
+          onPress: () => {
+            signOut();
+            setOnboarded(false);
             router.replace('/onboarding');
           },
         },
@@ -585,6 +607,31 @@ export default function SettingsScreen() {
                 <Feather name="chevron-right" size={18} color={theme.textMuted} />
               )}
             </View>
+          </Card>
+        </TouchableOpacity>
+
+        {/* Account Section */}
+        <Text style={[styles.sectionTitle, { color: theme.textTertiary }]}>ACCOUNT</Text>
+        {user && (
+          <Card style={[styles.menuCard, { marginBottom: Spacing.sm }]}>
+            <View style={styles.aiMenuContent}>
+              <View style={[styles.aiMenuIcon, { backgroundColor: theme.primarySoft }]}>
+                <Feather name="user" size={16} color={theme.primary} />
+              </View>
+              <View style={styles.aiMenuText}>
+                <Text style={[styles.menuLabel, { color: theme.text }]}>
+                  {user.fullName || user.email || 'Signed In'}
+                </Text>
+                <Text style={[styles.notificationHint, { color: theme.textTertiary }]}>
+                  {user.provider === 'apple' ? 'Apple Account' : 'Google Account'}
+                </Text>
+              </View>
+            </View>
+          </Card>
+        )}
+        <TouchableOpacity onPress={handleLogOut}>
+          <Card style={styles.menuCard}>
+            <Text style={[styles.menuLabel, { color: theme.error }]}>Log Out</Text>
           </Card>
         </TouchableOpacity>
 

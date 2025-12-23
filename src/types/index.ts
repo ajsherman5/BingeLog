@@ -90,6 +90,7 @@ export interface AppState {
   lastCheckIn?: number;
   notificationsEnabled: boolean;
   subscription: Subscription;
+  user?: AuthUser;
 }
 
 export type ThemeMode = 'light' | 'dark' | 'system';
@@ -117,4 +118,15 @@ export interface PredictiveAlert {
   message: string;
   suggestion?: string;
   dismissedAt?: number;
+}
+
+// Auth types
+export type AuthProvider = 'apple' | 'google';
+
+export interface AuthUser {
+  id: string;
+  email?: string;
+  fullName?: string;
+  provider: AuthProvider;
+  createdAt: number;
 }

@@ -12,6 +12,8 @@ import {
   Milestone,
   Subscription,
   SubscriptionSource,
+  AuthUser,
+  AuthProvider,
 } from '../types';
 import { EMOTIONS, LOCATIONS, MILESTONES } from '../constants/data';
 import { schedulePredictiveNotifications } from '../utils/notifications';
@@ -39,6 +41,10 @@ interface AppContextType extends AppState {
   isPremium: boolean;
   upgradeToPremium: (source: SubscriptionSource) => void;
   restorePurchase: () => Promise<boolean>;
+  // Auth
+  isAuthenticated: boolean;
+  setUser: (user: AuthUser) => void;
+  signOut: () => void;
   // Data management
   resetAllData: () => Promise<void>;
 }
@@ -73,6 +79,7 @@ const initialState: AppState = {
   lastCheckIn: undefined,
   notificationsEnabled: false,
   subscription: initialSubscription,
+  user: undefined,
 };
 
 export function AppProvider({ children }: { children: ReactNode }) {
@@ -427,6 +434,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  // Auth methods
+  const isAuthenticated = !!state.user;
+
+  const setUser = (user: AuthUser) => {
+    setState((prev) => ({ ...prev, user }));
+    triggerHaptic('success');
+  };
+
+  const signOut = () => {
+    setState((prev) => ({ ...prev, user: undefined }));
+  };
+
   if (!isLoaded) {
     return null;
   }
@@ -461,6 +480,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         isPremium,
         upgradeToPremium,
         restorePurchase,
+        isAuthenticated,
+        setUser,
+        signOut,
         resetAllData,
       }}
     >
